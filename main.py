@@ -1,21 +1,28 @@
 from fastapi import FastAPI, UploadFile, File, Depends
 from datetime import datetime
 from typing import Optional
-from sqlmodel import SQLModel, Field, create_engine, Session
+from sqlmodel import SQLModel, Field, create_engine, Session, select
 from dotenv import load_dotenv
 from pgvector.sqlalchemy import Vector
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
 import os
 import io
+import google.generativeai as genai
 
 load_dotenv()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY is None:
+    raise RuntimeError("GEMINI_API_KEY is not set")
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL is None:
     raise RuntimeError("DATABASE_URL is not set, check your .env file")
 
 engine = create_engine(DATABASE_URL, echo=True)
 
+genai.configure(api_key=GEMINI_API_KEY) # type: ignore
+gemini_model = genai.GenerativeModel('models/gemini-flash-latest') # type: ignore
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 class Document(SQLModel, table=True):
@@ -30,6 +37,11 @@ class Chunk(SQLModel, table=True):
     chunk_index: int
     chunk_text: str
     embedding: list[float] = Field(sa_type=Vector(384)) # type: ignore
+
+class AskRequest(SQLModel):
+    question: str
+
+
 
 app = FastAPI(root_path = "/api/v1")
 
@@ -52,6 +64,30 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str
 
     return chunks # type: ignore
 
+@app.post("/ask")
+async def ask_question(body: AskRequest, session: Session = Depends(get_session)): # type: ignore
+    question_embedding = embedding_model.encode(body.question) # type: ignore # type: ignore
+    statement = (
+        select(Chunk)
+        .order_by(Chunk.embedding.cosine_distance(question_embedding)) # type: ignore
+        .limit(3)
+    )
+    results = session.exec(statement)
+    top_chunks = results.all()
+
+    context = "\n\n".join([chunk.chunk_text for chunk in top_chunks])
+
+    prompt = f"""Answer the question using only the following context. If the answer isn't in the context, say you don't know.
+
+    Context:
+    {context}
+    Question: {body.question}"""
+
+    response = gemini_model.generate_content(prompt) # type: ignore
+    answer = response.text
+
+    return {"question": body.question, "answer": answer, "sources": [chunk.chunk_text for chunk in top_chunks]} # type: ignore
+
 
 @app.post("/documents")
 async def upload_document(file: UploadFile = File(...), session: Session = Depends(get_session)):  # type: ignore
@@ -72,6 +108,4 @@ async def upload_document(file: UploadFile = File(...), session: Session = Depen
         new_chunk = Chunk(document_id=new_doc.file_id, chunk_index=index, chunk_text=chunk, embedding=embedding) # type: ignore
         session.add(new_chunk)
         session.commit()
-        return {"file_id": new_doc.file_id, "file_name": new_doc.file_name, "chunks_created": len(chunks)} # type: ignore
-
-    return {"file_id": new_doc.file_id, "file_name": new_doc.file_name} # type: ignore
+    return {"file_id": new_doc.file_id, "file_name": new_doc.file_name, "chunks_created": len(chunks)} # type: ignore

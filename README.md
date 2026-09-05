@@ -2,7 +2,7 @@
 
 A tool to chat with your own documents. Upload a PDF, and it's automatically parsed, split into chunks, and embedded into a vector database, ready to be searched and used to answer questions grounded in the actual document content.
 
-This project is in progress. The ingestion pipeline (upload, text extraction, chunking, embeddings) is complete and working. The retrieval and question-answering side is being built next.
+This project is in progress. The full pipeline works end to end: upload a PDF, and it gets parsed, chunked, and embedded into a vector database; ask a question, and it retrieves the most relevant chunks by semantic similarity and generates a grounded answer using an LLM, citing the source passages it used. Authentication and deployment are the next steps.
 
 ## What it does right now
 
@@ -11,10 +11,13 @@ This project is in progress. The ingestion pipeline (upload, text extraction, ch
 - Splits the text into overlapping chunks, so context isn't lost at chunk boundaries
 - Generates a vector embedding for each chunk using a local sentence-transformer model
 - Stores each chunk and its embedding in PostgreSQL, using `pgvector`, linked back to its source document
+- Accepts a natural-language question, embeds it, and runs a vector similarity search to find the most relevant chunks, regardless of exact keyword overlap
+- Passes the retrieved chunks to an LLM (Gemini) with an instruction to answer only from that context, reducing hallucinated answers
+- Returns the generated answer along with the source chunks it was based on
 
 ## Why chunking and embeddings, specifically
 
-A whole document can't be embedded as a single vector without losing precision, unrelated sections average out into a vague, imprecise representation. Splitting the document into small, overlapping chunks means each chunk's embedding represents a focused piece of meaning. At query time, a question can be matched against the closest chunk by meaning, not exact keyword overlap. This is what will let the eventual question-answering feature find the right part of a document even when the question is phrased differently from the source text.
+A whole document can't be embedded as a single vector without losing precision, unrelated sections average out into a vague, imprecise representation. Splitting the document into small, overlapping chunks means each chunk's embedding represents a focused piece of meaning. At query time, a question is matched against the closest chunks by meaning, not exact keyword overlap, so it finds the right part of a document even when the question is phrased differently from the source text. Retrieved chunks are then handed to an LLM with an explicit instruction to answer only from that context, which is what keeps answers grounded in the actual document instead of the model's general knowledge.
 
 ## Tech Stack
 
@@ -92,8 +95,9 @@ http://127.0.0.1:8000/docs
 | Method | Endpoint | Description |
 |--------|----------|--------------|
 | POST | /documents | Upload a PDF. Extracts text, chunks it, generates embeddings, and stores everything. |
+| POST | /ask | Ask a question. Retrieves the most relevant chunks by vector similarity and returns an LLM-generated answer grounded in those chunks, with sources. |
 
-More endpoints (asking questions, retrieving answers with citations) are in progress.
+Requires a `GEMINI_API_KEY` in `.env` for the `/ask` endpoint.
 
 ## Data Model
 
@@ -120,10 +124,12 @@ Chunking uses a fixed-size sliding window (500 characters per chunk, 100 charact
 - PDF text extraction
 - Writing chunking logic from scratch (fixed-size windows with overlap)
 - Generating and storing vector embeddings with `pgvector`
-- Reasoning about why chunk size and overlap matter for retrieval quality
+- Vector similarity search (`cosine_distance`, ordering by closeness rather than exact match)
+- Prompt construction for grounded, context-restricted LLM answers
+- Reasoning about why chunk size, overlap, and retrieval count affect answer quality
 
 ## Next steps
 
-- Question-answering endpoint: embed a user's question, run a vector similarity search against stored chunks, pass the top matches to an LLM, and return an answer with citations back to the source chunk
 - Authentication (JWT), reusing the pattern from my other project, so documents belong to specific users
 - Deployment
+- Better source citations (page numbers, more precise highlighting of the exact answer span)

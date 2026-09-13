@@ -2,7 +2,9 @@
 
 A tool to chat with your own documents. Upload a PDF, and it's automatically parsed, split into chunks, and embedded into a vector database, ready to be searched and used to answer questions grounded in the actual document content.
 
-This project is in progress. The full pipeline works end to end: upload a PDF, and it gets parsed, chunked, and embedded into a vector database; ask a question, and it retrieves the most relevant chunks by semantic similarity and generates a grounded answer using an LLM, citing the source passages it used. Documents and questions are scoped to the authenticated user, so each user only ever sees their own uploads. Deployment is the next step.
+This project is in progress. The full pipeline works end to end: upload a PDF, and it gets parsed, chunked, and embedded into a vector database; ask a question, and it retrieves the most relevant chunks by semantic similarity and generates a grounded answer using an LLM, citing the source passages it used. Documents and questions are scoped to the authenticated user, so each user only ever sees their own uploads.
+
+**Live:** https://notemind-production-de7b.up.railway.app/docs
 
 ## What it does right now
 
@@ -146,8 +148,8 @@ Retrieval joins `Chunk` to `Document` and filters by the logged-in user's `user_
 - SQL joins across related tables to enforce per-user data ownership at the query level
 - Supporting both a JSON login endpoint (for real clients) and a form-encoded OAuth2 endpoint (for Swagger UI / standard tooling) against the same underlying auth logic
 - Reasoning about why chunk size, overlap, and retrieval count affect answer quality
+- Deploying a FastAPI + PostgreSQL app to Railway, including debugging a missing requirements.txt, a build step that skipped dependency installation, and a missing environment variable reference
 
 ## Next steps
 
-- Deployment
 - Better source citations (page numbers, more precise highlighting of the exact answer span)

@@ -44,6 +44,7 @@ class Document(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.now)
     raw_file_text: str
     user_id: Optional[int] =  Field(default=None, foreign_key="user.user_id")
+    description: Optional[str] = None
 
 class Chunk(SQLModel, table=True):
     chunk_number: Optional[int] = Field(default=None, primary_key=True)

@@ -10,6 +10,7 @@ from passlib.context import CryptContext
 from jose import jwt, JWTError
 from datetime import timedelta
 from fastapi.security import OAuth2PasswordBearer,OAuth2PasswordRequestForm
+from sqlalchemy import text
 
 import os
 import io
@@ -67,15 +68,18 @@ class UserCreate(SQLModel):
 
 
 app = FastAPI(root_path = "/api/v1")
+
 def get_session():
     with Session(engine) as session:
         yield session
 
 @app.on_event('startup') #type: ignore
 def on_startup():
+    with engine.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     SQLModel.metadata.create_all(engine)
 
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str]:
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str]:  
     chunks = []
     position = 0
     while position < len(text):

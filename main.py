@@ -11,6 +11,7 @@ from jose import jwt, JWTError
 from datetime import timedelta
 from fastapi.security import OAuth2PasswordBearer,OAuth2PasswordRequestForm
 from sqlalchemy import text
+from fastapi.responses import RedirectResponse
 
 import os
 import io
@@ -72,6 +73,10 @@ app = FastAPI(root_path = "/api/v1")
 def get_session():
     with Session(engine) as session:
         yield session
+
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs")
 
 @app.on_event('startup') #type: ignore
 def on_startup():
